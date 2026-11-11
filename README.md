@@ -247,20 +247,7 @@ Une tâche n'est considérée terminée que si :
 
 **Checklist de livraison :** README à jour ; scripts/notebooks reproductibles ; données exclues du dépôt si requis ; pipeline joblib ; métriques figées ; figures ; DAG ; application Streamlit ; tests ; captures de démonstration ; limitations et présentation.
 
-## 10. Import Jira du CSV fourni
-
-Le fichier `jira_student_mental_health_plan.csv` contient les colonnes : `Work item ID`, `Work Type`, `Summary`, `Description`, `Parent`, `Priority`, `Status`, `Labels`, `Start date`, `Due Date`, `Original Estimate`.
-
-1. Dans Jira Cloud, ouvrir l'import CSV (chemin exact selon droits et interface Jira) et choisir **le projet de destination**.
-2. Déclarer l'encodage **UTF-8**, séparateur **virgule**, et le format de date **`yyyy-MM-dd`** (Java SimpleDateFormat) correspondant au fichier.
-3. Mapper `Work Type` → **Work Type / Issue Type**, `Summary` → **Summary**, `Parent` → **Parent**, `Work item ID` → **Work item ID**, `Description` → **Description**, `Priority` → **Priority**, `Status` → **Status**, `Labels` → **Labels**, `Due Date` → **Due Date**.
-4. Mapper `Start date` → **Start date** uniquement si ce champ est disponible dans le projet, et `Original Estimate` → **Original Estimate** uniquement si le suivi du temps est activé (nombre **de secondes**). Sinon, **décocher** ces colonnes lors du mapping.
-5. Vérifier l'existence des types **Epic** et **Task**, du statut **To Do** et des priorités **High** / **Medium** dans la configuration du projet ; mapper les valeurs si les noms locaux diffèrent.
-6. Importer et vérifier 2 Epics, quelques tâches et leurs relations `Parent`, les dates et les estimations avant de considérer l'import réussi. Les IDs numériques du CSV sont des références **internes d'import**, pas des clés Jira définitives.
-
-Atlassian documente les champs `Summary`, `Work Type`, `Parent`, `Work item ID`, `Due Date`, `Labels`, `Priority` et l'estimation initiale en **secondes** : [guide officiel CSV Jira Cloud](https://support.atlassian.com/jira-cloud-administration/docs/import-data-from-a-csv-file/), [préparation et hiérarchie](https://support.atlassian.com/jira-software-cloud/docs/prepare-a-csv-file-for-import/). L'import hiérarchique dépend de la configuration et des autorisations du projet Jira.
-
-## 11. Références
+## 10. Références
 
 - [Dataset — Kaggle](https://www.kaggle.com/datasets/maqdadali/mental-health-risk-prediction-dataset-students)
 - [scikit-learn — Pipelines et bonnes pratiques](https://scikit-learn.org/stable/modules/compose.html)
