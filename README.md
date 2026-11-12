@@ -16,7 +16,7 @@ Les expressions « détection », « prévention » et « priorisation » décri
 
 - **Source :** [Mental Health Risk Prediction Dataset (Students) — Kaggle](https://www.kaggle.com/datasets/maqdadali/mental-health-risk-prediction-dataset-students)
 - **Nature :** données tabulaires à auditer avant toute modélisation.
-- **Variable cible :** **à confirmer dans le fichier téléchargé** ; ne pas supposer son nom, son nombre de classes ni la manière dont ses étiquettes ont été produites.
+- **Variable cible :** `Mental_Health_Risk`, avec les classes `Low`, `Medium` et `High`. Le fichier ne décrit pas la méthode de création des étiquettes.
 - **Licence, provenance, consentement et représentativité :** vérifier les informations réellement fournies par le créateur du dataset et documenter les inconnues.
 - **Confidentialité :** éviter d'inclure des identifiants personnels, observations sensibles brutes ou copies publiques des données dans le dépôt Git.
 
@@ -27,8 +27,6 @@ Les expressions « détection », « prévention » et « priorisation » décri
 3. Valeurs manquantes, doublons et valeurs impossibles ; distinguer anomalies réelles et valeurs rares mais plausibles.
 4. Colonnes identifiantes et **fuites de cible** (variables dérivées de la cible ou disponibles seulement après l'événement prédit).
 5. Risques de biais, échantillonnage non représentatif et absence éventuelle de validation clinique.
-
-> Aucune liste de variables, aucun score et aucune interprétation du dataset ne sont annoncés avant inspection du fichier source.
 
 ## 3. Objectifs et livrables
 
@@ -48,7 +46,7 @@ Les expressions « détection », « prévention » et « priorisation » décri
 
 | Besoin | Technologies prévues |
 |---|---|
-| Langage / environnement | Python 3.11 ou 3.12, `uv` ou `venv`, Git |
+| Langage / environnement | Python 3.14 pour les notebooks, Python 3.12 dans Docker, `uv`, Git |
 | Manipulation | NumPy, pandas |
 | Exploration / graphiques | Matplotlib, Seaborn, éventuellement Plotly |
 | Modèles / pipeline | scikit-learn, imbalanced-learn si pertinent |
@@ -58,23 +56,9 @@ Les expressions « détection », « prévention » et « priorisation » décri
 | Interface | Streamlit |
 | Tests | pytest et tests de fumée / reproductibilité |
 
-### Installation de départ (environnement Data Science)
+### Environnement des notebooks
 
-```bash
-# Depuis la racine du dépôt — Python 3.11 conseillé
-uv venv --python 3.11
-
-# Sous Linux / WSL
-source .venv/bin/activate
-
-# Sous Windows PowerShell, à la place :
-# .venv\Scripts\Activate.ps1
-
-uv pip install pandas numpy matplotlib seaborn plotly \
-  scikit-learn imbalanced-learn streamlit joblib pytest kaggle
-```
-
-**Note :** ce sont les dépendances proposées, pas un environnement déjà figé. Avant livraison, produire un `requirements.txt` / `pyproject.toml` et verrouiller les versions réellement utilisées. Pour Airflow, utiliser un **environnement distinct** ou Docker afin d'éviter les conflits de dépendances, et suivre les contraintes officielles correspondant à la version de Python : [documentation Airflow](https://airflow.apache.org/docs/apache-airflow/stable/start.html). Le prototype n'exige pas de GPU.
+Depuis la racine du dépôt, `uv sync` installe l’environnement de `uv.lock`. Les conteneurs partagent les versions de scikit-learn, NumPy et pandas définies dans `requirements-ml.txt`. Les dépendances de l’interface sont dans `app/requirements.txt`.
 
 ### Récupérer le dataset
 
@@ -87,47 +71,25 @@ kaggle datasets download \
 
 Vérifier le nom des fichiers obtenus avant d'écrire les chemins dans les scripts ; il n'est pas présumé ici. Ne pas versionner `data/raw/` ni les fichiers renfermant des données sensibles sans autorisation explicite.
 
-## 5. Arborescence cible (à créer progressivement)
+## 5. Arborescence du pipeline et de la démo
 
 ```text
-student-mental-health-risk/
-├── README.md
-├── pyproject.toml                 # Ou requirements.txt
-├── .gitignore
-├── configs/
-│   └── config.yaml               # Cible, seed, chemins, paramètres
-├── data/
-│   ├── raw/                      # Entrées : non versionnées
-│   ├── interim/
-│   └── processed/
-├── notebooks/
-│   ├── 01_data_audit_eda.ipynb
-│   ├── 02_preprocessing.ipynb
-│   └── 03_modeling_evaluation.ipynb
-├── src/
-│   └── student_risk/
-│       ├── data.py
-│       ├── validation.py
-│       ├── preprocessing.py
-│       ├── training.py
-│       ├── evaluation.py
-│       └── inference.py
-├── dags/
-│   └── student_risk_pipeline.py
-├── app/
-│   └── streamlit_app.py
-├── models/                       # Pipeline joblib local, version contrôlée
-├── reports/
-│   ├── figures/
-│   ├── metrics/
-│   └── model_card.md
-└── tests/
-    ├── test_preprocessing.py
-    ├── test_training.py
-    └── test_inference.py
+soutnance_1/
+├── compose.yaml                      # Services et volumes locaux
+├── Dockerfile                        # Images Airflow et Streamlit
+├── requirements-ml.txt               # Dépendances communes du modèle
+├── data/raw/student-mental.csv        # Source montée en lecture seule
+├── notebooks/                        # Exploration et expérimentation
+├── dags/student_risk_pipeline.py      # Planification et dépendances des tâches
+├── src/soutnance_1/
+│   ├── schema.py                     # Variables, catégories et cible
+│   └── pipeline.py                   # Préparation, entraînement, évaluation
+└── app/
+    ├── requirements.txt
+    └── streamlit_app.py              # Résultats et formulaire de simulation
 ```
 
-Il s'agit d'une **architecture proposée**, pas d'une déclaration que tous ces fichiers existent déjà. Centraliser les paramètres et la logique réutilisable dans `src/` ; utiliser les notebooks pour l'exploration et la narration, non comme unique source du pipeline Airflow.
+Le pipeline Docker publie ses propres artefacts dans les volumes déclarés par `compose.yaml`. Les notebooks utilisent les dossiers `artifacts/` et `models/`.
 
 ## 6. Protocole scientifique
 
@@ -167,37 +129,84 @@ Il s'agit d'une **architecture proposée**, pas d'une déclaration que tous ces 
 
 ### Étape 5 — Airflow et Streamlit
 
-**DAG cible :**
+Le DAG `student_risk_pipeline` enchaîne quatre tâches.
 
 ```text
-validate_source
-       |
-prepare_split
-       |
-train_and_cross_validate
-       |
-select_and_package
-       |
-publish_validation_metrics
+prepare_data → preprocess_data → train_model → evaluate_model
 ```
 
-- Tâches idempotentes, chemins et configurations explicites, journalisation, gestion des exceptions et fichiers produits vérifiés.
-- Prévoir une exécution planifiée et une démonstration de reprise / visualisation des statuts. La **mesure du test final est un contrôle ponctuel**, pas une nouvelle étape de sélection exécutée après chaque relance du DAG.
-- La partie Streamlit présente le résumé EDA, le comparatif, les métriques de test figées, la matrice de confusion, les limites et un formulaire de simulation utilisant **des entrées anonymes ou synthétiques**.
-- Afficher sur tous les écrans de prédiction : *« Démonstration pédagogique — résultat non clinique, non diagnostique et non destiné à une décision individuelle. »*
-- Contrôler les types, bornes et catégories à l'entrée ; ne pas collecter ni conserver de données personnelles dans l'interface de démonstration.
+- `prepare_data` lit `data/raw/student-mental.csv`, vérifie le schéma, retire `Student_ID` et calcule des statistiques agrégées.
+- `preprocess_data` crée la séparation stratifiée 80/20 avec la graine 22 des notebooks et prépare le `ColumnTransformer`. Chaque pli apprend ses propres transformations pendant l’entraînement.
+- `train_model` compare une référence majoritaire, la régression logistique, KNN et Random Forest sur cinq plis. Il optimise les deux meilleurs classifieurs par F1 macro et réentraîne le modèle retenu sur les 80 % d’entraînement.
+- `evaluate_model` calcule les métriques et la matrice à partir des prédictions hors pli. Les plis servent également à sélectionner les hyperparamètres, ce qui peut rendre les scores de validation optimistes. La tâche publie le modèle et les métriques dans le volume `pipeline-results`, monté en lecture seule dans Streamlit.
 
-### Exécution de l'application (après implémentation)
+#### 1. Démarrer les services sous Windows
 
-```bash
-streamlit run app/streamlit_app.py
+Ouvrir Docker Desktop en mode conteneurs Linux. Depuis PowerShell, à la racine du dépôt, vérifier que `docker version` affiche une section `Server` et que `data/raw/student-mental.csv` est présent.
+
+```powershell
+docker compose config --quiet
+docker compose up --build -d
+docker compose ps -a
 ```
 
-### Tests (après implémentation)
+`airflow-init` initialise PostgreSQL et termine avec le code `0`. Le processeur charge les DAG, le scheduler lance les tâches avec `LocalExecutor` et le serveur API héberge l’interface. Le premier build télécharge les images et installe les dépendances.
 
-```bash
-pytest -q
+#### 2. Lancer et suivre un run Airflow
+
+Ouvrir [Airflow](http://localhost:8081) et se connecter avec `admin`. Airflow génère le mot de passe à la première initialisation et le conserve dans un volume Docker. Pour l’afficher localement :
+
+```powershell
+docker compose exec airflow-api cat /opt/airflow/auth/passwords.json
 ```
+
+Dans **Dags**, ouvrir `student_risk_pipeline` et cliquer sur **Trigger**. L’optimisation des modèles peut prendre plusieurs minutes. Le DAG est actif à sa création et planifié **tous les jours à 06 h, heure de Casablanca**, sans rattrapage des exécutions historiques. Le cron se règle dans `dags/student_risk_pipeline.py`. Après modification du code, relancer `docker compose up --build -d`.
+
+Dans **Grid** ou **Graph**, sélectionner le run, cliquer sur une tâche et ouvrir **Logs**. Une tâche en échec est retentée une fois après deux minutes. Après avoir corrigé la cause, sélectionner **Clear task instance** sur la tâche en échec et inclure les tâches en aval si nécessaire. Par exemple, une erreur `CSV source introuvable` se corrige en remettant le fichier dans `data/raw/` avant de relancer `prepare_data`.
+
+```powershell
+docker compose exec airflow-scheduler airflow dags list-import-errors
+docker compose exec airflow-scheduler airflow dags list-runs student_risk_pipeline
+docker compose logs --tail 100 airflow-init airflow-api airflow-scheduler airflow-dag-processor
+```
+
+#### 3. Consulter les performances et simuler une prédiction
+
+Après le succès de `evaluate_model`, ouvrir ou recharger [Streamlit](http://localhost:8501). **Performances** affiche les métriques, la matrice de confusion et le comparatif des modèles. **Données** résume la cible et les valeurs manquantes. Dans **Simulation**, modifier les valeurs du profil fictif et cliquer sur **Calculer la prédiction** pour afficher la classe estimée et les scores par classe.
+
+Pour évaluer ponctuellement le modèle sur les 20 % réservés au test, lancer un run manuel dans Airflow avec cette configuration JSON dans le dialogue **Trigger** :
+
+```json
+{"test_final": true}
+```
+
+L’option **Test final figé** apparaît alors dans Streamlit avec le modèle et le run évalués. Les runs quotidiens conservent ce rapport et mettent à jour les métriques de validation.
+
+Pour arrêter les services en conservant les résultats et l’historique Airflow :
+
+```powershell
+docker compose down
+```
+
+#### Démo Streamlit sans Docker
+
+Si le moteur Docker est indisponible, exécuter les étapes directement avec Python depuis la racine du dépôt. `runtime/` reçoit les artefacts locaux et l’environnement de démo.
+
+```powershell
+uv venv runtime/venv
+uv pip install --python runtime/venv/Scripts/python.exe -r requirements-ml.txt -r app/requirements.txt
+$env:PYTHONPATH = 'src'
+$env:OPENBLAS_NUM_THREADS = '1'
+$env:OMP_NUM_THREADS = '1'
+$runId = 'demo-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+foreach ($stage in 'prepare', 'preprocess', 'train', 'evaluate') {
+    & runtime/venv/Scripts/python.exe -m soutnance_1.pipeline $stage $runId
+    if ($LASTEXITCODE -ne 0) { throw "Échec de l’étape $stage" }
+}
+& runtime/venv/Scripts/python.exe -m streamlit run app/streamlit_app.py --server.address 127.0.0.1 --server.port 8502
+```
+
+Ouvrir [la démo locale](http://localhost:8502). La planification et le suivi des tâches passent par les services Airflow.
 
 ## 7. Organisation du travail — 5 jours
 
@@ -256,7 +265,3 @@ Une tâche n'est considérée terminée que si :
 - [Apache Airflow — Quick Start](https://airflow.apache.org/docs/apache-airflow/stable/start.html)
 - [Streamlit — Documentation](https://docs.streamlit.io/)
 - [Atlassian — Import CSV](https://support.atlassian.com/jira-cloud-administration/docs/import-data-from-a-csv-file/)
-
----
-
-**État initial :** planification et documentation de démarrage. Résultats expérimentaux, variables et métriques réelles à compléter après l'analyse du dataset.
