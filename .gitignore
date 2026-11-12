@@ -34,3 +34,6 @@ ENV/
 *.swp
 *.swo
 .DS_Store
+
+.env
+runtime/
