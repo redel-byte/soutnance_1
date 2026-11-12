@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import joblib
@@ -20,8 +21,8 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, FunctionTransformer, OrdinalEncoder
 
-DATA_PATH = Path("data/raw/student-mental.csv")
-OUTPUT_DIR = Path("artifacts")
+DATA_PATH = Path(os.getenv("STUDENT_DATA_PATH", "data/raw/student-mental.csv"))
+OUTPUT_DIR = Path(os.getenv("STUDENT_RESULTS_ROOT", "artifacts"))
 TARGET = "Mental_Health_Risk"
 RANDOM_STATE = 22
 Z_SCORE_THRESHOLD = 3
@@ -140,16 +141,13 @@ def evaluate_model(model, X_test, y_test):
 
     print(classification_report(y_test, y_pred))
 
-    ConfusionMatrixDisplay.from_predictions(y_test, y_pred,cmap="Blue")
+    ConfusionMatrixDisplay.from_predictions(y_test, y_pred, cmap="Blues")
     plt.title("Confusion matrix on the held-out test set")
     plt.show()
 
 
 # Run complete pipeline
 def main():
-    # OUTPUT_DIR.mkdir(exist_ok=True)
-    # from pprint import pprint as p
-
     X_train, X_test, y_train, y_test = prepare_data()
 
     model = train_model(X_train, y_train, tuning=True).loc[0, "Best Estimator"]
@@ -158,6 +156,7 @@ def main():
     
     evaluate_model(model, X_test, y_test)
 
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, OUTPUT_DIR / "best_model.joblib")
 
 
