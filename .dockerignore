@@ -1,0 +1,13 @@
+.git
+.venv
+.env
+.env.*
+.streamlit/secrets.toml
+**/__pycache__
+artifacts
+data
+models
+notebooks
+repport
+runtime
+docker*.txt
