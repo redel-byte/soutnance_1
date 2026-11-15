@@ -21,8 +21,9 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler, FunctionTransformer, OrdinalEncoder
 
-DATA_PATH = Path(os.getenv("STUDENT_DATA_PATH", "data/raw/student-mental.csv"))
-OUTPUT_DIR = Path(os.getenv("STUDENT_RESULTS_ROOT", "artifacts"))
+DATA_PATH = Path("data/raw/student-mental.csv")
+OUTPUT_DIR = Path("artifacts")
+
 TARGET = "Mental_Health_Risk"
 RANDOM_STATE = 22
 Z_SCORE_THRESHOLD = 3
