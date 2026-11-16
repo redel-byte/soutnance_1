@@ -46,7 +46,7 @@ Les expressions « détection », « prévention » et « priorisation » décri
 
 | Besoin | Technologies prévues |
 |---|---|
-| Langage / environnement | Python 3.14 pour les notebooks, Python 3.12 dans Docker, `uv`, Git |
+| Langage / environnement | Python 3.14 pour les notebooks et Docker, `uv`, Git |
 | Manipulation | NumPy, pandas |
 | Exploration / graphiques | Matplotlib, Seaborn, éventuellement Plotly |
 | Modèles / pipeline | scikit-learn, imbalanced-learn si pertinent |
@@ -58,7 +58,7 @@ Les expressions « détection », « prévention » et « priorisation » décri
 
 ### Environnement des notebooks
 
-Depuis la racine du dépôt, `uv sync` installe l’environnement de `uv.lock`. Les conteneurs partagent les versions de scikit-learn, NumPy et pandas définies dans `requirements-ml.txt`. Les dépendances de l’interface sont dans `app/requirements.txt`.
+Depuis la racine du dépôt, `uv sync` installe l’environnement de `uv.lock`. L’image Docker commune utilise `requirements-ml.txt` pour le modèle et `app/requirements.txt` pour l’interface.
 
 ### Récupérer le dataset
 
@@ -76,14 +76,17 @@ Vérifier le nom des fichiers obtenus avant d'écrire les chemins dans les scrip
 ```text
 soutnance_1/
 ├── compose.yaml                      # Services et volumes locaux
-├── Dockerfile                        # Images Airflow et Streamlit
+├── Dockerfile                        # Image commune à Airflow et Streamlit
 ├── requirements-ml.txt               # Dépendances communes du modèle
 ├── data/raw/student-mental.csv        # Source montée en lecture seule
 ├── notebooks/                        # Exploration et expérimentation
 ├── dags/student_risk_pipeline.py      # Planification et dépendances des tâches
 ├── src/soutnance_1/
-│   ├── schema.py                     # Variables, catégories et cible
-│   └── pipeline.py                   # Préparation, entraînement, évaluation
+│   ├── config.py                     # Chemins, cible et paramètres communs
+│   ├── preparation.py
+│   ├── pretraitement.py
+│   ├── entrainement.py
+│   └── evaluation.py
 └── app/
     ├── requirements.txt
     └── streamlit_app.py              # Résultats et formulaire de simulation
@@ -132,13 +135,13 @@ Le pipeline Docker publie ses propres artefacts dans les volumes déclarés par 
 Le DAG `student_risk_pipeline` enchaîne quatre tâches.
 
 ```text
-prepare_data → preprocess_data → train_model → evaluate_model
+prepare → preprocess → train → evaluate
 ```
 
-- `prepare_data` lit `data/raw/student-mental.csv`, vérifie le schéma, retire `Student_ID` et calcule des statistiques agrégées.
-- `preprocess_data` crée la séparation stratifiée 80/20 avec la graine 22 des notebooks et prépare le `ColumnTransformer`. Chaque pli apprend ses propres transformations pendant l’entraînement.
-- `train_model` compare une référence majoritaire, la régression logistique, KNN et Random Forest sur cinq plis. Il optimise les deux meilleurs classifieurs par F1 macro et réentraîne le modèle retenu sur les 80 % d’entraînement.
-- `evaluate_model` calcule les métriques et la matrice à partir des prédictions hors pli. Les plis servent également à sélectionner les hyperparamètres, ce qui peut rendre les scores de validation optimistes. La tâche publie le modèle et les métriques dans le volume `pipeline-results`, monté en lecture seule dans Streamlit.
+- `prepare` retire `Student_ID` et effectue une séparation stratifiée 80/20 avec la graine 22.
+- `preprocess` prépare le `ColumnTransformer`. Chaque pli apprend ses transformations pendant l’entraînement.
+- `train` optimise la régression logistique, KNN et Random Forest sur cinq plis par F1 macro, puis sauvegarde le meilleur pipeline dans `best_model.joblib`.
+- `evaluate` évalue ce pipeline sur les 20 % réservés au test et sauvegarde `classification_report.txt` et `confusion_matrix.png`.
 
 #### 1. Démarrer les services sous Windows
 
@@ -150,37 +153,29 @@ docker compose up --build -d
 docker compose ps -a
 ```
 
-`airflow-init` initialise PostgreSQL et termine avec le code `0`. Le processeur charge les DAG, le scheduler lance les tâches avec `LocalExecutor` et le serveur API héberge l’interface. Le premier build télécharge les images et installe les dépendances.
+Le service `airflow` lance `airflow standalone` avec SQLite. Le volume `airflow-home` conserve le nouvel historique Airflow. Streamlit réutilise la même image et lit le modèle depuis le volume `pipeline-results`.
 
 #### 2. Lancer et suivre un run Airflow
 
-Ouvrir [Airflow](http://localhost:8081) et se connecter avec `admin`. Airflow génère le mot de passe à la première initialisation et le conserve dans un volume Docker. Pour l’afficher localement :
+Ouvrir Airflow et se connecter avec `admin`. Airflow génère le mot de passe à la première initialisation et le conserve dans `airflow-home`. [Airflow](http://localhost:8081)
 
 ```powershell
-docker compose exec airflow-api cat /opt/airflow/auth/passwords.json
+docker compose exec airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated
 ```
 
-Dans **Dags**, ouvrir `student_risk_pipeline` et cliquer sur **Trigger**. L’optimisation des modèles peut prendre plusieurs minutes. Le DAG est actif à sa création et planifié **tous les jours à 06 h, heure de Casablanca**, sans rattrapage des exécutions historiques. Le cron se règle dans `dags/student_risk_pipeline.py`. Après modification du code, relancer `docker compose up --build -d`.
+Dans **Dags**, ouvrir `student_risk_pipeline` et cliquer sur **Trigger**. L’optimisation des modèles peut prendre plusieurs minutes. Le DAG est actif à sa création et s’exécute tous les jours, sans rattrapage. Après modification du code, relancer `docker compose up --build -d`.
 
-Dans **Grid** ou **Graph**, sélectionner le run, cliquer sur une tâche et ouvrir **Logs**. Une tâche en échec est retentée une fois après deux minutes. Après avoir corrigé la cause, sélectionner **Clear task instance** sur la tâche en échec et inclure les tâches en aval si nécessaire. Par exemple, une erreur `CSV source introuvable` se corrige en remettant le fichier dans `data/raw/` avant de relancer `prepare_data`.
+Dans **Grid** ou **Graph**, sélectionner le run, cliquer sur une tâche et ouvrir **Logs**. Après avoir corrigé la cause d’un échec, utiliser **Clear task instance** sur la tâche et les tâches en aval à rejouer.
 
 ```powershell
-docker compose exec airflow-scheduler airflow dags list-import-errors
-docker compose exec airflow-scheduler airflow dags list-runs student_risk_pipeline
-docker compose logs --tail 100 airflow-init airflow-api airflow-scheduler airflow-dag-processor
+docker compose exec airflow airflow dags list-import-errors
+docker compose exec airflow airflow dags list-runs student_risk_pipeline
+docker compose logs --tail 100 airflow
 ```
 
 #### 3. Consulter les performances et simuler une prédiction
 
-Après le succès de `evaluate_model`, ouvrir ou recharger [Streamlit](http://localhost:8501). **Performances** affiche les métriques, la matrice de confusion et le comparatif des modèles. **Données** résume la cible et les valeurs manquantes. Dans **Simulation**, modifier les valeurs du profil fictif et cliquer sur **Calculer la prédiction** pour afficher la classe estimée et les scores par classe.
-
-Pour évaluer ponctuellement le modèle sur les 20 % réservés au test, lancer un run manuel dans Airflow avec cette configuration JSON dans le dialogue **Trigger** :
-
-```json
-{"test_final": true}
-```
-
-L’option **Test final figé** apparaît alors dans Streamlit avec le modèle et le run évalués. Les runs quotidiens conservent ce rapport et mettent à jour les métriques de validation.
+Après le succès du DAG, ouvrir Streamlit, renseigner un profil fictif et cliquer sur **Predict**. Le tableau de comparaison, le rapport et la matrice de confusion se trouvent dans `/home/airflow/student-artifacts` dans le conteneur `airflow`. [Streamlit](http://localhost:8501)
 
 Pour arrêter les services en conservant les résultats et l’historique Airflow :
 
@@ -198,9 +193,10 @@ uv pip install --python runtime/venv/Scripts/python.exe -r requirements-ml.txt -
 $env:PYTHONPATH = 'src'
 $env:OPENBLAS_NUM_THREADS = '1'
 $env:OMP_NUM_THREADS = '1'
-$runId = 'demo-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
-foreach ($stage in 'prepare', 'preprocess', 'train', 'evaluate') {
-    & runtime/venv/Scripts/python.exe -m soutnance_1.pipeline $stage $runId
+$env:STUDENT_OUTPUT_DIR = 'runtime/artifacts'
+$env:STUDENT_MODEL_PATH = 'runtime/artifacts/best_model.joblib'
+foreach ($stage in 'preparation', 'pretraitement', 'entrainement', 'evaluation') {
+    & runtime/venv/Scripts/python.exe -m "soutnance_1.$stage"
     if ($LASTEXITCODE -ne 0) { throw "Échec de l’étape $stage" }
 }
 & runtime/venv/Scripts/python.exe -m streamlit run app/streamlit_app.py --server.address 127.0.0.1 --server.port 8502

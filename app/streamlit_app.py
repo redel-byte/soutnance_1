@@ -1,16 +1,23 @@
+import os
+from pathlib import Path
+
 import joblib
 import pandas as pd
 import streamlit as st
 
 # Load the trained pipeline
 @st.cache_resource
-def load_model():
-    return joblib.load("models/best_pipeline.joblib")
+def load_model(path, modified_at):
+    return joblib.load(path)
 
-
-model = load_model()
 
 st.title("Student Mental Health Risk Prediction")
+
+model_path = Path(os.environ.get("STUDENT_MODEL_PATH", "models/best_pipeline.joblib"))
+if not model_path.is_file():
+    st.info("Run the student_risk_pipeline DAG to train the model, then refresh this page.")
+    st.stop()
+model = load_model(model_path, model_path.stat().st_mtime_ns)
 
 with st.form("prediction_form"):
     age = st.number_input("Age", 17, 29, 21)
