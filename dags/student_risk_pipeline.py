@@ -1,7 +1,9 @@
 import subprocess
+import sys
+
 import pendulum
 
-from airflow.sdk import dag, task, chain, get_current_context
+from airflow.sdk import chain, dag, task
 
 
 @dag(
@@ -12,25 +14,19 @@ from airflow.sdk import dag, task, chain, get_current_context
     max_active_runs=1,
 )
 def student_risk_pipeline():
-
     @task
-    def run_stage(stage):
-        run_id = get_current_context()["run_id"]
+    def run_stage(module):
+        subprocess.run([sys.executable, "-u", "-m", f"soutnance_1.{module}"], check=True)
 
-        command = [
-            "/opt/airflow/ml-venv/bin/python",
-            "-m", "soutnance_1.pipeline",
-            stage,
-            run_id,
-        ]
-
-        subprocess.run(command, check=True)
-
-    stages = ["prepare", "preprocess", "train", "evaluate"]
-
+    stages = {
+        "prepare": "preparation",
+        "preprocess": "pretraitement",
+        "train": "entrainement",
+        "evaluate": "evaluation",
+    }
     tasks = [
-        run_stage.override(task_id=stage)(stage)
-        for stage in stages
+        run_stage.override(task_id=stage)(module)
+        for stage, module in stages.items()
     ]
 
     chain(*tasks)
