@@ -148,19 +148,22 @@ prepare → preprocess → train → evaluate
 Ouvrir Docker Desktop en mode conteneurs Linux. Depuis PowerShell, à la racine du dépôt, vérifier que `docker version` affiche une section `Server` et que `data/raw/student-mental.csv` est présent.
 
 ```powershell
+if (-not (Test-Path .env)) {
+    python -c "import secrets; print('POSTGRES_PASSWORD=' + secrets.token_hex(24)); print('AIRFLOW_JWT_SECRET=' + secrets.token_hex(32))" | Set-Content .env -Encoding ascii
+}
 docker compose config --quiet
 docker compose up --build -d
 docker compose ps -a
 ```
 
-Le service `airflow` lance `airflow standalone` avec SQLite. Le volume `airflow-home` conserve le nouvel historique Airflow. Streamlit réutilise la même image et lit le modèle depuis le volume `pipeline-results`.
+`airflow-init` initialise la base PostgreSQL, puis le serveur API, le scheduler et le processeur de DAG démarrent. Le volume `postgres-db-volume` conserve l’historique et `pipeline-results` contient les artefacts du pipeline. Conserver le fichier `.env` pour garder les mêmes identifiants PostgreSQL entre les redémarrages.
 
 #### 2. Lancer et suivre un run Airflow
 
 Ouvrir Airflow et se connecter avec `admin`. Airflow génère le mot de passe à la première initialisation et le conserve dans `airflow-home`. [Airflow](http://localhost:8081)
 
 ```powershell
-docker compose exec airflow cat /opt/airflow/simple_auth_manager_passwords.json.generated
+docker compose exec airflow-webserver cat /opt/airflow/simple_auth_manager_passwords.json.generated
 ```
 
 Dans **Dags**, ouvrir `student_risk_pipeline` et cliquer sur **Trigger**. L’optimisation des modèles peut prendre plusieurs minutes. Le DAG est actif à sa création et s’exécute tous les jours, sans rattrapage. Après modification du code, relancer `docker compose up --build -d`.
@@ -168,16 +171,16 @@ Dans **Dags**, ouvrir `student_risk_pipeline` et cliquer sur **Trigger**. L’op
 Dans **Grid** ou **Graph**, sélectionner le run, cliquer sur une tâche et ouvrir **Logs**. Après avoir corrigé la cause d’un échec, utiliser **Clear task instance** sur la tâche et les tâches en aval à rejouer.
 
 ```powershell
-docker compose exec airflow airflow dags list-import-errors
-docker compose exec airflow airflow dags list-runs student_risk_pipeline
-docker compose logs --tail 100 airflow
+docker compose exec airflow-webserver airflow dags list-import-errors
+docker compose exec airflow-webserver airflow dags list-runs student_risk_pipeline
+docker compose logs --tail 100 airflow-webserver airflow-scheduler airflow-dag-processor
 ```
 
-#### 3. Consulter les performances et simuler une prédiction
+#### 3. Consulter les performances
 
-Après le succès du DAG, ouvrir Streamlit, renseigner un profil fictif et cliquer sur **Predict**. Le tableau de comparaison, le rapport et la matrice de confusion se trouvent dans `/home/airflow/student-artifacts` dans le conteneur `airflow`. [Streamlit](http://localhost:8501)
+Après le succès du DAG, le tableau de comparaison, le rapport et la matrice de confusion se trouvent dans `/home/airflow/student-artifacts` dans le conteneur `airflow-scheduler`.
 
-Pour arrêter les services en conservant les résultats et l’historique Airflow :
+Pour arrêter les services en conservant les résultats et l’historique Airflow, utiliser la commande suivante.
 
 ```powershell
 docker compose down
