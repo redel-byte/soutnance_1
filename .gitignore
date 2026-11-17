@@ -29,6 +29,7 @@ ENV/
 
 .uv/
 
+.streamlit/
 .vscode/
 .idea/
 *.swp

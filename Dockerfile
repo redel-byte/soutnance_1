@@ -3,7 +3,7 @@ FROM apache/airflow:slim-3.4.0-python3.14
 WORKDIR /opt/project
 
 COPY requirements-ml.txt app/requirements.txt /tmp/
-RUN pip install --no-cache-dir "apache-airflow==${AIRFLOW_VERSION}" \
+RUN pip install --no-cache-dir "apache-airflow[postgres]==${AIRFLOW_VERSION}" \
     -r /tmp/requirements-ml.txt -r /tmp/requirements.txt \
     && pip check \
     && mkdir -p /home/airflow/student-artifacts
